@@ -32,7 +32,7 @@ jobs:
       - name: build
         run: ./linux-amd64/malta build
       - name: upload pages artifact
-        uses: actions/upload-pages-artifact@v4
+        uses: actions/upload-pages-artifact@v3
         with:
           path: dist
   # Deployment job
