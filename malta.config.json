@@ -5,40 +5,38 @@
 	"twitter": "@pilcrowonpaper",
 	"sidebar": [
 		{
-			"title": "Guides",
+			"title": "指南",
 			"pages": [
-				["Server-side tokens", "/server-side-tokens"],
-				["Sessions", "/sessions"],
-				["Password authentication", "/password-authentication"],
-				["Email verification", "/email-verification"],
-				["Password reset", "/password-reset"],
-				["Generating random values", "/random-values"],
-				["OAuth", "/oauth"],
-				["Multi-factor authentication (MFA)", "/mfa"],
-				["WebAuthn", "/webauthn"],
-				["Cross-site request forgery (CSRF)", "/csrf"],
-				["Open redirect", "/open-redirect"]
+				["服务器端令牌", "/server-side-tokens"],
+				["会话管理", "/sessions"],
+				["密码认证", "/password-authentication"],
+				["邮箱验证", "/email-verification"],
+				["密码重置", "/password-reset"],
+				["生成随机值", "/random-values"],
+				["OAuth认证", "/oauth"],
+				["多因素认证 (MFA)", "/mfa"],
+				["WebAuthn认证", "/webauthn"],
+				["跨站请求伪造 (CSRF)", "/csrf"],
+				["开放重定向", "/open-redirect"]
 			]
 		},
 		{
-			"title": "Cryptography",
+			"title": "密码学",
 			"pages": [
 				["ECDSA", "/cryptography/ecdsa"]
 			]
 		},
 		{
-			"title": "Links",
+			"title": "链接",
 			"pages": [
 				[
-					"GitHub repository",
-					"https://github.com/pilcrowonpaper/copenhagen"
+					"翻译仓库",
+					"https://github.com/Starxy/copenhagen-zh"
 				],
-				["Twitter", "https://twitter.com/pilcrowonpaper"],
 				[
-					"OWASP Cheat Sheet Series",
+					"OWASP Cheatsheet",
 					"https://cheatsheetseries.owasp.org"
-				],
-				["Donate", "https://github.com/sponsors/pilcrowOnPaper"]
+				]
 			]
 		}
 	]

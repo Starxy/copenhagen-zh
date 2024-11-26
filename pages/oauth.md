@@ -2,35 +2,37 @@
 title: "OAuth"
 ---
 
-# OAuth
+# OAuth认证
 
-## Table of contents
+## 目录
 
-- [Overview](#overview)
-- [Create authorization URL](#create-authorization-url)
-- [Validate authorization code](#validate-authorization-code)
-- [Proof key for code exchange (PKCE)](#proof-key-for-code-exchange-pkce-flow)
-- [OpenID Connect (OIDC)](#openid-connect-oidc)
-	- [OpenID Connect Discovery](#openid-connect-discovery)
-- [Account linking](#account-linking)
-- [Other considerations](#other-considerations)
+- [OAuth认证](#oauth认证)
+  - [目录](#目录)
+  - [概述](#概述)
+  - [创建授权 URL](#创建授权-url)
+  - [验证授权码](#验证授权码)
+  - [用于代码交换的证明密钥 (PKCE)](#用于代码交换的证明密钥-pkce)
+  - [OpenID Connect (OIDC)](#openid-connect-oidc)
+    - [OpenID Connect 发现](#openid-connect-发现)
+  - [账户关联](#账户关联)
+  - [其他注意事项](#其他注意事项)
 
-## Overview
+## 概述
 
-OAuth is a widely used protocol for authorization. It's what's behind "Sign in with Google" and "Sign in with GitHub." It allows users to grant access to their resources on an external service, like Google, to your application without sharing their credentials. Instead of implementing a password-based auth, we can replace it with OAuth to let a third-party service handle authentication. You can then get the user's profile and use that to create users and sessions.
+OAuth 是一种广泛使用的授权协议，支持“使用 Google 登录”和“使用 GitHub 登录”等功能。它允许用户在不共享凭据的情况下，将对外部服务（如 Google）的资源访问权限授予您的应用程序。通过 OAuth，我们可以让第三方服务处理身份验证，然后获取用户的资料来创建用户和会话。
 
-In a basic OAuth flow, the user is redirected to a third-party service, the service authenticates the user, and the user is redirected back to your application. An access token for the user is made available which allows you to request resources on behalf of the user.
+在基本的 OAuth 流程中，用户被重定向到第三方服务，该服务对用户进行身份验证，然后用户被重定向回您的应用程序。此时，您可以获得一个访问令牌，用于代表用户请求资源。
 
-It requires 2 server endpoints in your application:
+您的应用程序需要两个服务器端点：
 
-1. Login endpoint (GET): Redirects the user to the OAuth provider.
-2. Callback endpoint (GET): Handles the redirect from the OAuth provider.
+1. 登录端点 (GET)：将用户重定向到 OAuth 提供商。
+2. 回调端点 (GET)：处理来自 OAuth 提供商的重定向。
 
-There are multiple versions of OAuth, with OAuth 2.0 being the latest one. This page will only cover OAuth 2.0, specifically the authorization code grant type, as standardized in [RFC 6749](https://datatracker.ietf.org/doc/html/rfc6749). The implicit grant type is deprecated and should not be used.
+OAuth 有多个版本，OAuth 2.0 是最新的版本。本页仅涵盖 OAuth 2.0，特别是授权码授权类型，标准化在 [RFC 6749](https://datatracker.ietf.org/doc/html/rfc6749) 中。隐式授权类型已被弃用，不应使用。
 
-## Create authorization URL
+## 创建授权 URL
 
-Using GitHub as an example, the first step is to create a GET endpoint (login endpoint) that redirects the user to GitHub. The redirect location is the authorization URL with a few parameters.
+以 GitHub 为例，第一步是创建一个 GET 端点（登录端点），将用户重定向到 GitHub。重定向位置是带有一些参数的授权 URL。
 
 ```
 https://github.com/login/oauth/authorize?
@@ -40,33 +42,33 @@ response_type=code
 &state=<STATE>
 ```
 
-The state is used to ensure the user initiating the process and the one we redirected back to (in the next section) are the same user. As such, a new state must be generated on each request. While it is not strictly required by the spec, it is highly recommended and may be required depending on the provider. It should be generated using a cryptographically secure random generator and have at least 112 bits of entropy. The state can also be used to pass data from the login endpoint to the callback endpoint, though a cookie can just be used instead.
+`state` 用于确保发起流程的用户和被重定向回来的用户是同一个人。因此，每次请求都必须生成新的 `state`。虽然规范没有严格要求，但强烈建议这样做，且可能根据提供商的要求是必需的。它应使用加密安全的随机生成器生成，并具有至少 112 位的熵。`state` 也可以用于从登录端点传递数据到回调端点，不过也可以使用 cookie。
 
-Your server must keep track of the state associated with each attempt. One simple approach is to store it as a cookie with `HttpOnly`, `SameSite=Lax`, `Secure`, and `Path=/` attributes. You may also assign the state to the current session.
+服务器必须跟踪与每次尝试相关联的 `state`。一种简单的方法是将其存储为具有 `HttpOnly`、`SameSite=Lax`、`Secure` 和 `Path=/` 属性的 cookie。您也可以将 `state` 分配给当前会话。
 
-You can define a `scope` parameter to request access to additional resources. If you have multiple scopes, they should be separated by spaces.
+可以定义一个 `scope` 参数来请求对其他资源的访问。如果有多个范围，它们应以空格分隔。
 
 ```
 &scope=email%20identity
 ```
 
-You can create a "Sign in" button by adding a link to the login endpoint.
+您可以通过添加一个指向登录端点的链接来创建一个“登录”按钮。
 
 ```html
-<a href="/login/github">Sign in with GitHub</a>
+<a href="/login/github">使用 GitHub 登录</a>
 ```
 
-## Validate authorization code
+## 验证授权码
 
-The user will be redirected to the callback endpoint (as defined in `redirect_uri`) with a single-use authorization code, which is included as a query parameter. This code is then exchanged for an access token.
+用户将被重定向到回调端点（在 `redirect_uri` 中定义），并附带一个一次性授权码，该码包含在查询参数中。然后将此代码交换为访问令牌。
 
 ```
 https://example.com/login/github/callback?code=<CODE>&state=<STATE>
 ```
 
-If you add a state to the authorization URL, the redirect request will include a `state` parameter. It is critical to check that it matches the state associated with the attempt. Return an error if the state is missing or if they don't match. A common mistake is forgetting to check whether the `state` parameter exists in the URL.
+如果您在授权 URL 中添加了 `state`，重定向请求将包含一个 `state` 参数。检查其是否与尝试相关联的 `state` 匹配至关重要。如果缺少 `state` 或不匹配，则返回错误。常见错误是忘记检查 URL 中是否存在 `state` 参数。
 
-The code is sent to the OAuth provider's token endpoint via an `application/x-www-form-urlencoded` POST request.
+代码通过 `application/x-www-form-urlencoded` POST 请求发送到 OAuth 提供商的令牌端点。
 
 ```
 POST https://github.com/login/oauth/access_token
@@ -80,14 +82,14 @@ grant_type=authorization_code
 &code=<CODE>
 ```
 
-If your OAuth provider uses a client secret, it should be base64 encoded with the client ID and secret included in the Authorization header (HTTP basic authorization scheme).
+如果您的 OAuth 提供商使用客户端密钥，则应将其与客户端 ID 一起在 Authorization 头中进行 base64 编码（HTTP 基本授权方案）。
 
 ```go
 var clientId, clientSecret string
 credentials := base64.StdEncoding.EncodeToString([]byte(clientId + ":" + clientSecret))
 ```
 
-Some providers also allow the client secret to be included in the body.
+一些提供商也允许在请求体中包含客户端密钥。
 
 ```
 POST https://github.com/login/oauth/access_token
@@ -101,23 +103,23 @@ grant_type=authorization_code
 &code=<CODE>
 ```
 
-The request will return an access token, which can then be used to get the user's identity. It may also include other fields such as `refresh_token` and `expires_in`.
+请求将返回一个访问令牌，然后可以用来获取用户的身份。它可能还包括其他字段，如 `refresh_token` 和 `expires_in`。
 
 ```
 { "access_token": "<ACCESS_TOKEN>" }
 ```
 
-For example, using the access token, you can get their GitHub profile and store their GitHub user ID, which will allow you to get their registered account when they sign in again. Be aware that the email address provided by the OAuth provider may not be verified. You may need to manually verify user emails or block users without a verified email.
+例如，使用访问令牌，您可以获取其 GitHub 个人资料并存储其 GitHub 用户 ID，这将允许您在他们再次登录时获取其注册帐户。请注意，OAuth 提供商提供的电子邮件地址可能未经验证。您可能需要手动验证用户的电子邮件或阻止没有经过验证电子邮件的用户。
 
-The access token itself should never be used as a replacement for sessions.
+访问令牌本身不应作为会话的替代品。
 
-## Proof key for code exchange (PKCE) flow
+## 用于代码交换的证明密钥 (PKCE)
 
-PKCE was introduced in [RFC 7636](https://datatracker.ietf.org/doc/html/rfc7636) to provide additional protection for OAuth 2.0. We recommend using it in addition to state and a client secret if your OAuth provider supports it. Be aware that some OAuth providers do not require a client secret when PKCE is enabled, in which case PKCE should not be used.
+PKCE 在 [RFC 7636](https://datatracker.ietf.org/doc/html/rfc7636) 中引入，为 OAuth 2.0 提供了额外的保护。我们建议在支持的情况下使用 PKCE 以及 `state` 和客户端密钥。注意，一些 OAuth 提供商在启用 PKCE 时不需要客户端密钥，在这种情况下不应使用 PKCE。
 
-PKCE can replace state entirely, as both protect against CSRF attacks, but it may be required by your OAuth provider.
+PKCE 可以完全替代 `state`，因为两者都可以防御 CSRF 攻击，但它可能是您的 OAuth 提供商所要求的。
 
-A new code verifier must be generated on each request. It should be generated using a cryptographically secure random generator and have at least 112 bits of entropy (256 bits recommended by the RFC). Similar to state, your application must keep track of the code verifier associated with each attempt (using cookies or sessions). A base64url (no padding) encoded SHA256 hash of it called a code challenge is included in the authorization URL.
+每次请求必须生成一个新的代码验证器。它应使用加密安全的随机生成器生成，并具有至少 112 位的熵（RFC 建议 256 位）。与 `state` 类似，您的应用程序必须跟踪与每次尝试相关联的代码验证器（使用 cookies 或会话）。在授权 URL 中包含一个称为代码挑战的 base64url（无填充）编码的 SHA256 哈希。
 
 ```go
 var codeVerifier string
@@ -135,7 +137,7 @@ response_type=code
 &code_challenge=<CODE_CHALLENGE>
 ```
 
-In the callback endpoint, the code verifier of the current attempt should be sent alongside the authorization code.
+在回调端点，应将当前尝试的代码验证器与授权码一起发送。
 
 ```
 POST https://oauth2.googleapis.com/token
@@ -152,7 +154,7 @@ grant_type=authorization_code
 
 ## OpenID Connect (OIDC)
 
-[OpenID Connect](https://openid.net/specs/openid-connect-core-1_0.html) is a widely used protocol built on top of OAuth 2.0. An important addition to OAuth is that the identity provider returns an ID token alongside the access token. An ID token is a [JSON Web Token](https://datatracker.ietf.org/doc/html/rfc7519) that includes user data. It will always include a unique identifier for the user in the `sub` field. 
+[OpenID Connect](https://openid.net/specs/openid-connect-core-1_0.html) 是构建在 OAuth 2.0 之上的广泛使用的协议。OAuth 的一个重要补充是身份提供商返回一个 ID 令牌以及访问令牌。ID 令牌是一个包含用户数据的 [JSON Web Token](https://datatracker.ietf.org/doc/html/rfc7519)。它将始终在 `sub` 字段中包含用户的唯一标识符。
 
 ```
 {
@@ -161,21 +163,21 @@ grant_type=authorization_code
 }
 ```
 
-While you can validate the token with a public key, this is not strictly necessary for server-side applications if you're using HTTPS for communications.
+虽然可以使用公钥验证令牌，但如果您使用 HTTPS 进行通信，对于服务器端应用程序来说，这不是严格必要的。
 
-### OpenID Connect Discovery
+### OpenID Connect 发现
 
-OpenID Connect defines a [discovery mechanism](https://openid.net/specs/openid-connect-discovery-1_0.html) that allows clients to dynamically fetch the OpenID Provider's configuration, including the OAuth 2.0 endpoint locations. This eliminates the need to hard-code endpoint URLs in your application. To use OpenID Connect Discovery, your OpenID Provider must have a discovery endpoint available. 
+OpenID Connect 定义了一种[发现机制](https://openid.net/specs/openid-connect-discovery-1_0.html)，允许客户端动态获取 OpenID 提供商的配置，包括 OAuth 2.0 端点位置。这消除了在应用程序中硬编码端点 URL 的需要。要使用 OpenID Connect 发现，您的 OpenID 提供商必须有一个可用的发现端点。
 
-The discovery endpoint is a well-known URL that returns a JSON document containing the OpenID Provider's configuration information. Note that not all OAuth providers support OpenID Connect Discovery. Check your provider's documentation to determine if they offer a discovery endpoint. If not, you may still need to manually configure the endpoint URLs in your application.
+发现端点是一个众所周知的 URL，返回一个包含 OpenID 提供商配置信息的 JSON 文档。注意，并非所有 OAuth 提供商都支持 OpenID Connect 发现。检查您的提供商文档以确定他们是否提供发现端点。如果没有，您可能仍需要在应用程序中手动配置端点 URL。
 
-The well-known URL has the path `/.well-known/openid-configuration`. For example, Google's Discovery Endpoint looks like this:
+众所周知的 URL 的路径为 `/.well-known/openid-configuration`。例如，Google 的发现端点如下所示：
 
 ```
 https://accounts.google.com/.well-known/openid-configuration
 ```
 
-The endpoint will return a JSON object containing the OpenID Provider's configuration, including the endpoint URLs for authorization, token exchange, and user info retrieval.
+端点将返回一个 JSON 对象，包含 OpenID 提供商的配置，包括授权、令牌交换和用户信息检索的端点 URL。
 
 ```json
 {
@@ -189,12 +191,12 @@ The endpoint will return a JSON object containing the OpenID Provider's configur
 }
 ```
 
-With OpenID Connect Discovery, your application can dynamically adapt to changes in the OpenID Provider's configuration without requiring code updates. This ensures that your application always uses the most up-to-date endpoint URLs. The drawback is that you will have to make extra fetch requests.
+通过 OpenID Connect 发现，您的应用程序可以动态适应 OpenID 提供商配置的变化而无需代码更新。这确保了您的应用程序始终使用最新的端点 URL。缺点是您将不得不进行额外的获取请求。
 
-## Account linking
+## 账户关联
 
-Account linking allows users to sign in with any of their social accounts and be authenticated as the same user on your application. It is usually done by checking the email address registered with the provider. If you're using email to link accounts, make sure to validate the user's email. Most providers provide a `is_verified` field or similar in user profiles. Do not assume that the email has been verified unless the provider explicitly mentions it in their documentation. Users without a verified email should be prevented from completing the authentication process and prompted to verify their email first.
+账户关联允许用户使用任何社交账户登录，并在您的应用程序上被认证为同一用户。通常通过检查提供商注册的电子邮件地址来实现。如果您使用电子邮件来关联账户，请确保验证用户的电子邮件。大多数提供商在用户资料中提供 `is_verified` 字段或类似字段。除非提供商在其文档中明确提到，否则不要假设电子邮件已被验证。没有经过验证的电子邮件的用户应被阻止完成身份验证流程，并提示他们先验证电子邮件。
 
-## Other considerations
+## 其他注意事项
 
-- [Open redirect](/open-redirect).
+- [开放重定向](/open-redirect)。

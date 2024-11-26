@@ -2,39 +2,27 @@
 title: "Sessions"
 ---
 
-# Sessions
+# 会话管理
 
-## Table of contents
+## 概述
 
--   [Overview](#overview)
--   [Session lifetime](#session-lifetime)
-    -   [Sudo mode](#sudo-mode)
--   [Session hijacking](#session-hijacking)
--   [Session invalidation](#session-invalidation)
--   [Client storage](#client-storage)
-    -   [Cookies](#cookies)
-    -   [Web Storage API](#web-storage-api)
--   [Session fixation attacks](#session-fixation-attacks)
+在用户访问你的网站期间，他们会向服务器发出多次请求。如果需要在这些请求之间保持状态（如用户偏好），HTTP 本身不提供机制，因为它是无状态协议。
 
-## Overview
+会话是一种在服务器上保持状态的方法，特别适用于管理身份验证状态，如客户端的身份。我们可以为每个会话分配一个唯一的 ID，并将其存储在服务器上，用作令牌。然后，客户端可以通过发送会话 ID 来关联请求与会话。要实现身份验证，我们可以将用户数据与会话一起存储。
 
-Throughout a user's visit to your website, they will make multiple requests to your server. If you need to persist state, such as user preference, across those requests, HTTP doesn't provide a mechanism for it. It's a stateless protocol.
+会话 ID 必须足够长且随机，否则可能被他人通过猜测来冒充。请参阅[服务器端令牌](/server-side-tokens)指南以生成安全的会话 ID。会话 ID 可以在存储前进行哈希处理，以提供额外的安全性。
 
-Sessions are a way to persist state in the server. It is especially useful for managing the authentication state, such as the client's identity. We can assign each session with a unique ID and store it on the server to use it as a token. Then the client can associate the request with a session by sending the session ID with it. To implement authentication, we can simply store user data alongside the session.
+根据应用程序的不同，您可能只需管理已验证用户的会话，也可能需要同时管理已验证和未验证用户的会话。您甚至可以管理两种不同类型的会话——一种用于身份验证，另一种用于与身份验证无关的状态。
 
-It's important that the session ID is sufficiently long and random, or else someone could impersonate other users by just guessing their session IDs. See the [Server-side tokens](/server-side-tokens) guide for generating secure session IDs. Session IDs can be hashed before storage to provide an extra level of security.
+## 会话生命周期
 
-Depending on your application, you may only have to manage sessions for authenticated users, or for both authenticated and unauthenticated users. You can even manage 2 different kinds of sessions - one for auth and another for non-auth related state.
+如果您只管理已验证用户的会话，则每当用户登录时都会创建一个新会话。如果计划同时管理未验证用户的会话，当传入请求不包含有效会话时，应自动创建会话。确保您的应用程序不易受到[会话固定攻击](#会话固定攻击)的影响。
 
-## Session lifetime
+对于安全性要求高的应用程序，确保会话自动过期非常重要。这可以最大限度地减少攻击者劫持会话的时间。过期时间应与用户预期的单次使用时间相匹配。
 
-If you only manage sessions for authenticated users, a new session is created whenever a user signs in. If you plan to manage session for non-authenticated users as well, sessions should be automatically created when an incoming request doesn't include a valid session. Make sure you don't make your application vulnerable to [session fixation attacks](#session-fixation-attacks).
+然而，对于安全性要求较低的网站，如社交媒体应用，如果用户每天都需要登录会很烦人。一个好的做法是设置合理的过期时间，比如 30 天，并在会话被使用时延长过期时间。例如，会话默认在 30 天后过期，但如果在过期前 15 天内使用，会话的过期时间会被延长 30 天。这有效地使不活跃用户的会话失效，同时保持活跃用户的登录状态。
 
-For security-critical applications, it is crucial for sessions to expire automatically. This minimizes the time an attacker has to hijack sessions. The expiration should match how long the user is expected to use your application in a single sitting.
-
-However, for less critical websites, such as a social media app, it would be annoying for users if they had to sign in every single day. A good practice here is to set the expiration to a reasonable time, like 30 days, but extend the expiration whenever the session is used. For example, sessions may expire in 30 days by default, but the expiration gets pushed back 30 days when it's used within 15 days before expiration. This effectively invalidates sessions for inactive users, while keeping active users signed in.
-
-You can also combine both approaches. For example, you can set the expiration to an hour and extend it every 30 minutes but set an absolute expiration of 12 hours so sessions won't last for longer than that.
+您也可以结合两种方法。例如，可以将过期时间设置为 1 小时，并每 30 分钟延长一次，但设置一个绝对过期时间为 12 小时，以确保会话不会持续超过这个时间。
 
 ```go
 const sessionExpiresIn = 30 * 24 * time.Hour
@@ -55,56 +43,56 @@ func validateSession(sessionId string) (*Session, error) {
 }
 ```
 
-### Sudo mode
+### Sudo 模式
 
-An alternative to short-lived sessions is to implement long-lived sessions coupled with sudo mode. Sudo mode allows authenticated users to access security-critical components for a limited time by re-authenticating with one of their credentials (passwords, WebAuthn credentials, TOTP, etc). A simple way to implement this is by keeping track of when the user last used their credentials in each session. This approach provides the security benefits of short-lived sessions without annoying frequent users. This can also help against [session hijacking](#session-hijacking).
+一种替代短期会话的方法是实现长期会话结合 sudo 模式。Sudo 模式允许已验证用户通过重新验证其凭据（密码、WebAuthn 凭据、TOTP 等）在有限时间内访问安全关键组件。实现这种模式的简单方法是跟踪用户在每个会话中最后使用凭据的时间。这种方法提供了短期会话的安全优势，而不会频繁打扰用户。这也有助于防止[会话劫持](#会话劫持)。
 
-## Session hijacking
+## 会话劫持
 
-Session hijacking is another word for stealing sessions. Common attacks include XSS, man-in-the-middle (MITM), and session sniffing. MITM attacks are especially hard to mitigate since it's ultimately up to the users to protect their device and network. Still, there are some ways to protect your users.
+会话劫持是指窃取会话。常见攻击包括 XSS、中间人攻击（MITM）和会话嗅探。MITM 攻击尤其难以防范，因为最终取决于用户保护其设备和网络。然而，仍有一些方法可以保护用户。
 
-First, consider tracking the user agent (device) and IP address linked to the session to detect suspicious requests. IP addresses can be dynamic for mobile users so you may want to keep track of the general area (country) instead of the specific address. Limiting the number of sessions connected to a user based on these information is also a good safeguard.
+首先，考虑跟踪与会话相关的用户代理（设备）和 IP 地址，以检测可疑请求。IP 地址可能对移动用户是动态的，因此您可能需要跟踪一般区域（国家）而不是具体地址。基于这些信息限制连接到用户的会话数量也是一种好的防护措施。
 
-Since IP addresses and request headers can be easily spoofed, however, implementing [sudo mode](#sudo-mode) is recommended for any security-critical applications.
+由于 IP 地址和请求头很容易被伪造，因此建议在任何安全关键应用程序中实施[sudo 模式](#sudo-模式)。
 
-## Session invalidation
+## 会话失效
 
-Sessions can be invalidated by deleting it from both server and client storage.
+会话可以通过从服务器和客户端存储中删除来失效。
 
-When the user signs out, invalidate the current session, or for security-critical applications, invalidate all sessions belonging to that user.
+当用户注销时，使当前会话失效；对于安全关键应用程序，使该用户的所有会话失效。
 
-All sessions of the user should also be invalidated when they gain new permissions (email verification, new role, etc) or change passwords.
+当用户获得新权限（电子邮件验证、新角色等）或更改密码时，也应使其所有会话失效。
 
-## Client storage
+## 客户端存储
 
-The client should store the session ID in the user's device to be used for subsequent requests. The browser mainly provides 2 ways to store data - cookies and the Web Storage API. Cookies should be preferred for websites as they're automatically included in requests by the browser.
+客户端应将会话 ID 存储在用户设备中，以用于后续请求。浏览器主要提供两种存储数据的方法——cookies 和 Web Storage API。对于网站，应该优先使用 cookies，因为它们会被浏览器自动包含在请求中。
 
 ### Cookies
 
-Session cookies should have the following attributes:
+会话 cookies 应具备以下属性：
 
--   `HttpOnly`: Cookies are only accessible server-side
--   `SameSite=Lax`: Use `Strict` for critical websites
--   `Secure`: Cookies can only be sent over HTTPS
--   `Max-Age` or `Expires`: Must be defined to persist cookies
--   `Path=/`: Cookies can be accessed from all routes
+-   `HttpOnly`: 仅服务器端可访问 cookies
+-   `SameSite=Lax`: 对于关键网站使用 `Strict`
+-   `Secure`: 仅可通过 HTTPS 发送 cookies
+-   `Max-Age` 或 `Expires`: 必须定义以保持 cookies
+-   `Path=/`: cookies 可从所有路由访问
 
-[CSRF protection](/csrf) must be implemented when using cookies, and using the `SameSite` flag is not sufficient. Using cookies does not automatically protect your users from cross-site scripting attacks (XSS) as well. While the session ID can't be read directly, authenticated requests can still be made as browsers automatically include cookies in requests.
+在使用 cookies 时必须实施[CSRF 保护](/csrf)，仅使用 `SameSite` 标志是不够的。使用 cookies 并不能自动保护用户免受跨站脚本攻击（XSS）。虽然会话 ID 不能被直接读取，但经过身份验证的请求仍然可以被发出，因为浏览器会自动在请求中包含 cookies。
 
-The maximum expiration for a cookie is 400 days. If you plan for the session to be long-lived, continuously set the cookie.
+cookies 的最大过期时间为 400 天。如果计划让会话长期有效，请持续设置 cookies。
 
-`Lax` should be preferred over `Strict` for the `SameSite` attribute as using `Strict` will cause the browser to not send the session cookie when the user visits your application via an external link.
+`SameSite` 属性应优先使用 `Lax` 而不是 `Strict`，因为使用 `Strict` 会导致用户通过外部链接访问应用时浏览器不发送会话 cookie。
 
 ### Web Storage API
 
-Another option is to store session IDs inside `localStorage` or `sessionStorage`. If your website has an XSS vulnerability, this will allow attackers to directly read and steal the user's session ID. It is especially vulnerable to supply chain attacks since tokens can be stolen by just reading the entire local storage, without using any application-specific exploits.
+另一种选择是将会话 ID 存储在 `localStorage` 或 `sessionStorage` 中。如果网站存在 XSS 漏洞，这将允许攻击者直接读取和窃取用户的会话 ID。由于只需读取整个本地存储即可窃取令牌，因此它特别容易受到供应链攻击的影响，而无需使用任何特定于应用程序的漏洞。
 
-Session tokens can be sent with the request using the `Authorization` header for example. Do not send them inside URLs as query parameters or inside form data, nor should tokens sent in this manner be accepted.
+会话令牌可以通过 `Authorization` 头与请求一起发送。不要将它们作为查询参数或表单数据发送，也不应接受以这种方式发送的令牌。
 
-## Session fixation attacks
+## 会话固定攻击
 
-Applications that maintain sessions for both authenticated and unauthenticated users and reuse the current session when a user signs in are vulnerable to session fixation attacks.
+维护已验证和未验证用户会话的应用程序，并在用户登录时重用当前会话，容易受到会话固定攻击。
 
-Say an application allows the session ID to be sent inside the URL as a query parameter. If an attacker shares a link to the sign-in page with a session ID already included and the user signs in, the attacker now has a valid session ID to impersonate that user. A similar attack can be done if the application accepts session IDs in forms or cookies, though the latter requires an XSS vulnerability to exploit.
+假设应用程序允许在 URL 中作为查询参数发送会话 ID。如果攻击者分享一个包含会话 ID 的登录页面链接，而用户登录后，攻击者现在拥有一个有效的会话 ID，可以冒充该用户。如果应用程序在表单或 cookies 中接受会话 ID，也可以进行类似的攻击，尽管后者需要 XSS 漏洞才能利用。
 
-This can be avoided by always creating a new session when the user signs in and only accepting session IDs via cookies and request headers.
+可以通过在用户登录时始终创建一个新会话，并仅通过 cookies 和请求头接受会话 ID 来避免此问题。

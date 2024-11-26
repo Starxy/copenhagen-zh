@@ -2,11 +2,11 @@
 title: "Elliptic curve digital signature algorithm (ECDSA)"
 ---
 
-# Elliptic curve digital signature algorithm (ECDSA)
+# 椭圆曲线数字签名算法 (ECDSA)
 
-ECDSA is a digital signature algorithm using elliptic-curve cryptography. A private key is used to sign a message and a public key is used verify the signature.
+ECDSA 是一种使用椭圆曲线密码学的数字签名算法。使用私钥对消息进行签名，并使用公钥验证签名。
 
-The message is hashed with algorithms like SHA-256 before signing.
+消息在签名前会使用诸如 SHA-256 这样的算法进行哈希。
 
 ```go
 import (
@@ -20,13 +20,13 @@ hash := sha256.Sum256([]byte(msg))
 signature, err := ecdsa.SignASN1(rand.Reader, privateKey, hash[:])
 ```
 
-## Signatures
+## 签名
 
-ECDSA signatures are represented using a pair of positive integers, (r, s).
+ECDSA 签名由一对正整数 (r, s) 表示。
 
 ### IEEE P1363
 
-In the IEEE P1363 format, the signature is the concatenation of r and s. The values are encoded as big-endian bytes with a size equivalent to the curve size. For example, P-256 is 256 bits or 32 bytes in size.
+在 IEEE P1363 格式中，签名是 r 和 s 的连接。值作为大端字节进行编码，其大小等于曲线的大小。例如，P-256 是 256 位或 32 字节。
 
 ```ts
 r || s;
@@ -34,7 +34,7 @@ r || s;
 
 ### PKIX
 
-In [RFC 5480](https://datatracker.ietf.org/doc/html/rfc5480) by the PKIX working group, the signature is ASN.1 DER encoded sequence of r and s.
+在 PKIX 工作组的 [RFC 5480](https://datatracker.ietf.org/doc/html/rfc5480) 中，签名是 ASN.1 DER 编码的 r 和 s 序列。
 
 ```
 SEQUENCE {
@@ -43,19 +43,19 @@ SEQUENCE {
 }
 ```
 
-## Public keys
+## 公钥
 
-ECDSA public keys are represented as a pair of positive integers, (x, y).
+ECDSA 公钥由一对正整数 (x, y) 表示。
 
 ### SEC1
 
-In [SEC 1](https://www.secg.org/sec1-v2.pdf), public keys can either be encoded in an uncompressed or compressed form. Uncompressed keys are the concatenation of x and y, with a leading `0x04` byte. The values are encoded as big-endian bytes with a size equivalent to the curve size. For example, P-256 is 256 bits or 32 bytes in size.
+在 [SEC 1](https://www.secg.org/sec1-v2.pdf) 中，公钥可以被编码为未压缩或压缩形式。未压缩的公钥是 x 和 y 的连接，并带有一个前导 `0x04` 字节。值作为大端字节进行编码，其大小等于曲线的大小。例如，P-256 是 256 位或 32 字节。
 
 ```
 0x04 || x || y
 ```
 
-Compressed keys are the x value with a leading `0x02` byte if x is even or `0x03` byte if x is odd. The y value can be derived from x and the curve.
+压缩的公钥是 x 值，加上如果 x 为偶数则为前导 `0x02` 字节，如果 x 为奇数则为 `0x03` 字节。y 值可以从 x 和曲线导出。
 
 ```
 0x02 || x
@@ -64,7 +64,7 @@ Compressed keys are the x value with a leading `0x02` byte if x is even or `0x03
 
 ### PKIX
 
-In [RFC 5480](https://datatracker.ietf.org/doc/html/rfc5480) by the PKIX working group, the public key is represented as a `SubjectPublicKeyInfo` ASN.1 sequence. The `subjectPublicKey` is either the compressed or uncompressed SEC1 public key.
+在 PKIX 工作组的 [RFC 5480](https://datatracker.ietf.org/doc/html/rfc5480) 中，公钥表示为一个 `SubjectPublicKeyInfo` ASN.1 序列。`subjectPublicKey` 是压缩或未压缩的 SEC1 公钥。
 
 ```
 SubjectPublicKeyInfo := SEQUENCE {
@@ -73,7 +73,7 @@ SubjectPublicKeyInfo := SEQUENCE {
 }
 ```
 
-The `AlgorithmIdentifier` for ECDSA is an ASN.1 sequence with the ECDSA object identifier (`1.2.840.10045.2.1`) and the curve (e.g. `1.2.840.10045.3.1.7` for P-256 curve)
+ECDSA 的 `AlgorithmIdentifier` 是包含 ECDSA 对象标识符（`1.2.840.10045.2.1`）和曲线（例如，P-256 曲线的 `1.2.840.10045.3.1.7`）的 ASN.1 序列。
 
 ```
 AlgorithmIdentifier := SEQUENCE {

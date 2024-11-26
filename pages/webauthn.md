@@ -1,330 +1,319 @@
 ---
 title: "WebAuthn"
 ---
-
 # WebAuthn
 
-## Table of contents
+## 概述
 
--   [Overview](#overview)
--   [Vocabulary](#vocabulary)
--   [Registration](#registration)
--   [Authentication](#authentication)
+[Web身份验证（WebAuthn）标准](https://www.w3.org/TR/webauthn-2/)允许用户使用设备进行身份验证，可以是PIN码或生物识别。私钥存储在用户设备中，公钥存储在你的应用程序中。应用程序可以通过验证签名来认证用户。由于凭证与用户设备绑定，并且不可能进行暴力破解，潜在攻击者需要物理访问设备。
 
-## Overview
+WebAuthn通常有两种使用方式：通过密码钥匙或安全令牌。虽然没有严格定义，但密码钥匙通常指可以替代密码的凭证并存储在验证器中（驻留密钥）。另一方面，安全令牌则用作在密码验证后使用的第二因素。2FA的凭证通常加密并存储在依赖方的服务器中。这两种情况下，它们都是现有方法的更安全替代方案。
 
-The [Web Authentication (WebAuthn) standard](https://www.w3.org/TR/webauthn-2/) allow users to authenticate with their device, either with a PIN code or biometrics. The private key is stored in the user's device, while the public key is stored in your application. Applications can authenticate users by verifying signatures. Since credentials are bounded to the user's device (or devices) and brute-forcing is impossible, a potential attacker needs physical access to a device.
+使用WebAuthn，应用程序还可以通过制造商验证设备。这需要声明，不在本页涵盖。
 
-WebAuthn are usually used in 2 ways - with passkeys or security tokens. While they don't have a strict definition, passkeys usually refer to credentials that can replace passwords and stored in the authenticator (resident keys). Security tokens, on the other hand, are meant to be used as a second factor, after authenticating with a password. Credentials for 2FA are usually encrypted and stored in the relying party's server. In both cases, they are a more secure alternatives to existing methods.
+## 术语
 
-Using WebAuthn, applications can also verify the device with the manufacturer. This requires attestation and is not covered in this page.
+- 依赖方：你的应用程序。
+- 验证器：持有凭证的设备。
+- 挑战：随机生成的单次使用[令牌](/server-side-tokens)，用于防止重放攻击。推荐的最小熵为16字节。
+- 用户存在：用户可访问设备。
+- 用户验证：用户通过PIN码或生物识别验证其身份。
+- 驻留密钥，可发现凭证：存储在验证器（用户设备和安全令牌）中的凭证。非驻留密钥加密并存储在依赖方服务器中（你的数据库）。
 
-## Vocabulary
+## 注册
 
--   Relying party: Your application.
--   Authenticator: The device that holds the credential.
--   Challenge: A randomly generated, single-use [token](/server-side-tokens) to prevent replay attacks. The recommended minimum entropy is 16 bytes.
--   User presence: User has access to the device.
--   User verification: User has verified their identity via a pin-code or biometrics.
--   Resident keys, discoverable credentials: Credentials stored in stored in authenticators (user devices and security tokens). Non-resident keys are encrypted and stored in relying party servers (your database).
+在注册步骤中，验证器创建一个新凭证并返回其公钥。
 
-## Registration
-
-During the registration step, the authenticator creates a new credential and returns its public key.
-
-In the client, get a new challenge from the server and create a new credential with the [Web Authentication API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Authentication_API). This will prompt the user to authenticate with their device. Browsers such as Safari will only allow you to call this method if it was initiated by a user interaction (button click).
+在客户端，从服务器获取新挑战，并使用[Web身份验证API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Authentication_API)创建新凭证。这会提示用户使用设备进行身份验证。像Safari这样的浏览器只允许在用户交互（按钮点击）后调用此方法。
 
 ```ts
 const credential = await navigator.credentials.create({
-	publicKey: {
-		attestation: "none",
-		rp: { name: "My app" },
-		user: {
-			id: crypto.getRandomValues(new Uint8Array(32)),
-			name: username,
-			displayName: name,
-		},
-		pubKeyCredParams: [
-			{
-				type: "public-key",
-				// ECDSA with SHA-256
-				alg: -7,
-			},
-		],
-		challenge,
-		authenticatorSelection: {
-			// See note below.
-			userVerification: "required",
-			residentKey: "required",
-			requireResidentKey: true,
-		},
-		// list of existing credentials
-		excludeCredentials: [
-			{
-				id: new Uint8Array(/*...*/),
-				type: "public-key",
-			},
-		],
-	},
+    publicKey: {
+        attestation: "none",
+        rp: { name: "My app" },
+        user: {
+            id: crypto.getRandomValues(new Uint8Array(32)),
+            name: username,
+            displayName: name,
+        },
+        pubKeyCredParams: [
+            {
+                type: "public-key",
+                // ECDSA with SHA-256
+                alg: -7,
+            },
+        ],
+        challenge,
+        authenticatorSelection: {
+            userVerification: "required",
+            residentKey: "required",
+            requireResidentKey: true,
+        },
+        excludeCredentials: [
+            {
+                id: new Uint8Array(/*...*/),
+                type: "public-key",
+            },
+        ],
+    },
 });
 if (!(credential instanceof PublicKeyCredential)) {
-	throw new Error("Failed to create credential");
+    throw new Error("Failed to create credential");
 }
 const response = credential.response;
 if (!(response instanceof AuthenticatorAttestationResponse)) {
-	throw new Error("Unexpected");
+    throw new Error("Unexpected");
 }
 
 const clientDataJSON: ArrayBuffer = response.clientDataJSON;
 const attestationObject: ArrayBuffer = response.attestationObject;
 ```
 
--   `rp.name`: Your application's name.
--   `user.id`: Random user ID for the authenticator. This can be different from the actual user ID your application uses.
--   `user.name`: A human-friendly user identifier (username, email).
--   `user.displayName`: A human-friendly display name (does not need to be unique).
--   `excludeCredentials`: A list of the user's credentials to avoid duplicate credentials.
+- `rp.name`: 你的应用程序名称。
+- `user.id`: 用于验证器的随机用户ID。这可以不同于应用程序使用的实际用户ID。
+- `user.name`: 便于识别的用户标识符（用户名，电子邮件）。
+- `user.displayName`: 便于识别的显示名称（无需唯一）。
+- `excludeCredentials`: 用户凭证的列表，以避免重复凭证。
 
-The algorithm ID is from the [IANA COSE Algorithms registry](https://www.iana.org/assignments/cose/cose.xhtml). ECDSA with SHA-256 (ES256) is recommended as it is widely supported. You can also pass `-257` for RSASSA-PKCS1-v1.5 (RS256) to support a wider range of devices but devices that only support it are rare.
+算法ID来自[IANA COSE算法注册表](https://www.iana.org/assignments/cose/cose.xhtml)。推荐使用ECDSA和SHA-256（ES256），因为它广泛支持。你也可以使用`-257`支持RSA（RS256），以兼容更多设备，但仅支持它的设备较少。
 
-For most cases, `attestation` should be set to `"none"`. We don't need to verify the authenticity of the authenticator and not all authenticators support it.
+大多数情况下，`attestation`应设置为`"none"`。我们不需要验证验证器的真实性，并非所有验证器都支持这一操作。
 
-For passkeys, ensure the public key is a resident key and requires user verification.
-
-```ts
-const credential = await navigator.credentials.create({
-	publicKey: {
-		// ...
-		authenticatorSelection: {
-			userVerification: "required",
-			residentKey: "required",
-			requireResidentKey: true,
-		},
-	},
-});
-```
-
-For security tokens, we can skip user verification and the credential doesn't need to be a resident key. We can limit the authenticator to security tokens by setting `authenticatorAttachment` to `cross-platform` as well.
+对于密码钥匙，确保公钥是驻留密钥并要求用户验证。
 
 ```ts
 const credential = await navigator.credentials.create({
-	publicKey: {
-		// ...
-		authenticatorSelection: {
-			userVerification: "discouraged",
-			residentKey: "discouraged",
-			requireResidentKey: false,
-			authenticatorAttachment: "cross-platform",
-		},
-	},
+    publicKey: {
+        // ...
+        authenticatorSelection: {
+            userVerification: "required",
+            residentKey: "required",
+            requireResidentKey: true,
+        },
+    },
 });
 ```
 
-The client data JSON and authenticator data are sent to the server for verification. A simple way to send binary data is by encoding it with base64. Another option is use schemes like CBOR that encode JSON-like data into binary.
+对于安全令牌，可以跳过用户验证，凭证不需要是驻留密钥。通过将`authenticatorAttachment`设置为`cross-platform`限制验证器为安全令牌。
 
-The first step is to parse the attestation object, which is encoded with CBOR. This includes the attestation statement and authenticator data. You can use the attestation statement to verify the user's device if you required it. If you've set it to `"none"` in the client, verify that the statement format is `none`.
+```ts
+const credential = await navigator.credentials.create({
+    publicKey: {
+        // ...
+        authenticatorSelection: {
+            userVerification: "discouraged",
+            residentKey: "discouraged",
+            requireResidentKey: false,
+            authenticatorAttachment: "cross-platform",
+        },
+    },
+});
+```
+
+客户端数据JSON和验证器数据会发送到服务器进行验证。发送二进制数据的简单方法是使用base64编码。另一个选择是使用CBOR等方案，将类似JSON的数据编码为二进制。
+
+第一步是解析声称对象，该对象用CBOR编码。包括声明和验证器数据。你可以使用声明来验证用户的设备（如果需要）。如果在客户端将其设置为`"none"`，则验证声明格式为`none`。
 
 ```go
 var attestationObject AttestationObject
 
-// Parse attestation object
+// 解析声称对象
 
 if attestationObject.Fmt != "none" {
-	return errors.New("invalid attestation statement format")
+    return errors.New("invalid attestation statement format")
 }
 
 type AttestationObject  struct {
-	Fmt                  string // "fmt"
-	AttestationStatement AttestationStatement // "attStmt"
-	AuthenticatorData    []byte // "authData"
+    Fmt                  string // "fmt"
+    AttestationStatement AttestationStatement // "attStmt"
+    AuthenticatorData    []byte // "authData"
 }
 
 type AttestationStatement struct {
-	// see spec
+    // 见规范
 }
 ```
 
-Next is to parse the authenticator data.
+接下来解析验证器数据。
 
--   Bytes 0-31: Relying party ID hash.
--   Byte 32: Flags:
-    -   Bit 0 (least significant - rightmost): Use present.
-    -   Bit 2: User verified.
-    -   Bit 6: Includes credential data.
--   Bytes 33-36: Signature counter.
--   Variable bytes: Credential data (binary).
+- 字节0-31：依赖方ID哈希。
+- 字节32：标志：
+    - 位0（最低有效位）：用户存在。
+    - 位2：用户验证。
+    - 位6：包含凭证数据。
+- 字节33-36：签名计数器。
+- 可变字节：凭证数据（二进制）。
 
-The relying party ID is the domain without the protocol or port and the authenticator data includes the SHA-256 hash of it. For localhost, the relying party ID is `localhost`. Check for the user presence flag and for the user verification flag if you required user verification. The signature counter is incremented each time the credential is used and can be used to detect forged devices. If your application is intended to be used with hardware security tokens, where credentials are bound to the token, you'd want to store the counter with the credential and ensure the counter value is larger than the previous attempt. However, since passkeys are meant to be shared across devices, this can be safely ignored.
+依赖方ID为域名，不包括协议或端口，验证器数据包括其SHA-256哈希。对于localhost，依赖方ID为`localhost`。检查用户存在标志和用户验证标志（如果需要）。每次使用凭证时签名计数器都会增加，可用于检测伪造设备。如果你的应用程序预期用于硬件安全令牌，其中凭证绑定到令牌上，你需要将计数器与凭证一起存储并确保其值大于之前的尝试。然而，由于密码钥匙可以在设备间共享，因此可以忽略。
 
-Then, extract the credential ID and public key from the credential data.
+然后，从凭证数据中提取凭证ID和公钥。
 
--   Bytes 0-15: ID of the authenticator.
--   Bytes 16 and 17: Credential ID length.
--   Variable bytes: Credential ID.
--   Variable bytes: COSE public key.
+- 字节0-15：验证器ID。
+- 字节16和17：凭证ID长度。
+- 可变字节：凭证ID。
+- 可变字节：COSE公钥。
 
-The public key is a CBOR-encoded COSE key.
+公钥是CBOR编码的COSE密钥。
 
 ```go
 import (
-	"bytes"
-	"crypto/sha256"
-	"encoding/binary"
-	"encoding/json"
-	"errors"
+    "bytes"
+    "crypto/sha256"
+    "encoding/binary"
+    "encoding/json"
+    "errors"
 )
 if len(authenticatorData) < 37 {
-	return errors.New("invalid authenticator data")
+    return errors.New("invalid authenticator data")
 }
 rpIdHash := authenticatorData[0:32]
 expectedRpIdHash := sha256.Sum256([]byte("example.com"))
 if bytes.Equal(rpIdHash, expectedRpIdHash[:]) {
-	return errors.New("invalid relying party ID")
+    return errors.New("invalid relying party ID")
 }
 
-// Check for the "user present" flag.
+// 检查“用户存在”标志。
 if (authenticatorData[32] & 1) != 1 {
-	return errors.New("user not present")
+    return errors.New("user not present")
 }
-// Check for the "user verified" flag if you need user verification.
+// 如果需要用户验证，检查“用户验证”标志。
 if ((authenticatorData[32] >> 2) & 1) != 1 {
-	return errors.New("user not verified")
+    return errors.New("user not verified")
 }
 if ((authenticatorData[32] >> 6) & 1) != 1 {
-	return errors.New("missing credentials")
+    return errors.New("missing credentials")
 }
 
 if (len(authenticatorData) < 55) {
-	return errors.New("invalid authenticator data")
+    return errors.New("invalid authenticator data")
 }
 credentialIdSize:= binary.BigEndian.Uint16(authenticatorData[53 : 55])
 if (len(authenticatorData) < 55 + credentialIdSize) {
-	return errors.New("invalid authenticator data")
+    return errors.New("invalid authenticator data")
 }
 credentialId := authenticatorData[55 : 55+credentialIdSize]
 coseKey := authenticatorData[55+credentialIdSize:]
 
-// Parse COSE public key
+// 解析COSE公钥
 ```
 
-The structure of the public key will depend on the algorithm used. Below is the public key for ECDSA, which uses (x, y) for public keys. Validate the algorithm and curve.
+公钥的结构取决于使用的算法。下面是使用(x, y)作为公钥的ECDSA公钥。验证算法和曲线。
 
 ```
 {
-	1: 2 // EC2 key type
-	3: -7 // Algorithm ID for ECDSA P-256 with SHA-256
-	-1: 1 // Curve ID for P-256
-	-2: 0x00...00 // x coordinate in bit string
-	-3: 0x00...00 // y coordinate in bit string
+    1: 2 // EC2密钥类型
+    3: -7 // ECDSA P-256与SHA-256的算法ID
+    -1: 1 // P-256的曲线ID
+    -2: 0x00...00 // x坐标的位串
+    -3: 0x00...00 // y坐标的位串
 }
 ```
 
-Next, validate the client data, which is JSON-encoded. The origin is the domain of your application with the protocol and port. The challenge in the client data is base64url encoded with no padding.
+接下来，验证JSON编码的客户端数据。源是包含协议和端口的应用程序域名。客户端数据中的挑战是base64url编码，不带填充。
 
 ```go
 import (
-	"bytes"
-	"crypto/sha256"
-	"encoding/base64"
-	"encoding/json"
-	"errors"
+    "bytes"
+    "crypto/sha256"
+    "encoding/base64"
+    "encoding/json"
+    "errors"
 )
 
 var expectedChallenge []byte
 
-// Verify the challenge and delete it from storage.
+// 验证挑战并从存储中删除。
 
 var credentialId string
 
 var clientData ClientData
 
-// Parse JSON
+// 解析JSON
 
 if clientData.Type != "webauthn.create" {
-	return errors.New("invalid type")
+    return errors.New("invalid type")
 }
 if !verifyChallenge(clientData.Challenge) {
-	return errors.New("invalid challenge")
+    return errors.New("invalid challenge")
 }
 if clientData.Origin != "https://example.com" {
-	return errors.New("invalid origin")
+    return errors.New("invalid origin")
 }
 
 type ClientData struct {
-	Type	  string // "type"
-	Challenge string // "challenge"
-	Origin	  string // "origin"
+    Type	  string // "type"
+    Challenge string // "challenge"
+    Origin	  string // "origin"
 }
 ```
 
-Finally, create a new user with their public key and the credential ID. We recommend converting the COSE-encoded public key into one of the more compact and standard formats ([ECDSA](/cryptography/ecdsa#public-keys)).
+最后，用用户的公钥和凭证ID创建一个新用户。建议将COSE编码的公钥转换为更紧凑和标准的格式（[ECDSA](/cryptography/ecdsa#public-keys)）。
 
-## Authentication
+## 认证
 
-During the authentication step, the authenticator creates a new signature using the private key.
+在认证步骤中，验证器使用私钥创建一个新签名。
 
-Generate a challenge on the server and authenticate the user.
+在服务器上生成一个挑战并认证用户。
 
 ```ts
 const credential = await navigator.credentials.get({
-	publicKey: {
-		challenge,
-		userVerification: "required",
-	},
+    publicKey: {
+        challenge,
+        userVerification: "required",
+    },
 });
 
 if (!(credential instanceof PublicKeyCredential)) {
-	throw new Error("Failed to create credential");
+    throw new Error("Failed to create credential");
 }
 const response = credential.response;
 if (!(response instanceof AuthenticatorAssertionResponse)) {
-	throw new Error("Unexpected");
+    throw new Error("Unexpected");
 }
 
-const clientDataJSON: ArrayBuffer = response.clientDataJSON);
-const authenticatorData: ArrayBuffer = response.authenticatorData
-const signature: ArrayBuffer = response.signature);
+const clientDataJSON: ArrayBuffer = response.clientDataJSON;
+const authenticatorData: ArrayBuffer = response.authenticatorData;
+const signature: ArrayBuffer = response.signature;
 const credentialId: ArrayBuffer = publicKeyCredential.rawId;
 ```
 
-For implementing 2FA with security tokens, pass a list of the user's credentials to `allowCredentials` to support non-resident keys.
+要实现使用安全令牌的2FA，传递用户凭证列表到`allowCredentials`以支持非驻留密钥。
 
 ```ts
 const credential = await navigator.credentials.get({
-	publicKey: {
-		challenge,
-		userVerification: "required",
-		// list of user credentials
-		allowCredentials: [
-			{
-				id: new Uint8Array(/*...*/),
-				type: "public-key",
-			},
-		],
-	},
+    publicKey: {
+        challenge,
+        userVerification: "required",
+        allowCredentials: [
+            {
+                id: new Uint8Array(/*...*/),
+                type: "public-key",
+            },
+        ],
+    },
 });
 ```
 
-The client data, authenticator data, signature, and credential ID are sent to the server. The challenge, the authenticator, and the client data are first verified. This part is nearly identical to the steps for verifying attestation expect that the client data type should be `webauthn.get`.
+客户端数据、验证器数据、签名和凭证ID会发送到服务器。首先验证挑战、验证器和客户端数据。这部分几乎与验证声明的步骤相同，只是客户端数据类型应为`webauthn.get`。
 
 ```go
 if clientData.Type != "webauthn.get" {
-	return errors.New("invalid type")
+    return errors.New("invalid type")
 }
 ```
 
-Another difference is that the credential portion of the authenticator is not included.
+另一个不同之处在于验证器不包含凭证部分。
 
-Use the credential ID to get the credential's public key. **For 2FA, ensure that the credential belongs to the authenticated user.** Skipping this check will allow malicious actors to entirely skip 2FA. The signature is of the authenticator data and the SHA-256 hash of the client data JSON. For ECDSA, the signature is [ASN.1 DER encoded](/cryptography/ecdsa#pkix).
+使用凭证ID获取凭证的公钥。**对于2FA，确保凭证属于认证用户。**跳过此检查将允许恶意行为者完全跳过2FA。签名是验证器数据和客户端数据JSON的SHA-256哈希。对于ECDSA，签名是[ASN.1 DER编码的](/cryptography/ecdsa#pkix)。
 
 ```go
 import (
-	"crypto/ecdsa"
-	"crypto/sha256"
+    "crypto/ecdsa"
+    "crypto/sha256"
 )
 
 clientDataJSONHash := sha256.Sum256(clientDataJSON)
-// Concatenate the authenticator data with the hashed client data JSON.
+// 将验证器数据与客户端数据JSON的哈希连接。
 data := append(authenticatorData, clientDataJSONHash[:]...)
 hash := sha256.Sum256(data)
 validSignature := ecdsa.VerifyASN1(publicKey, hash[:], signature)

@@ -2,20 +2,20 @@
 title: "Open redirect"
 ---
 
-# Open redirect
+# 开放重定向
 
-Open redirect is a vulnerability where your application allows a user to control a redirect.
+开放重定向是一种漏洞，您的应用程序允许用户控制重定向。
 
-For example, you may want to redirect the user back to their original page after they sign in. To achieve this, you add a `redirect_to` URL query parameter to the login page and form. When a user signs in, the user is redirected to the location defined in `redirect_to`.
+例如，您可能希望在用户登录后将其重定向回原始页面。为此，您在登录页面和表单中添加了一个 `redirect_to` URL 查询参数。当用户登录时，用户将被重定向到 `redirect_to` 中定义的位置。
 
 ```
 https://example.com/login?redirect_to=%2Fhome
 ```
 
-But what if you accept any redirect location without validating it?
+但如果您在没有验证的情况下接受任何重定向位置会怎样？
 
 ```
 https://example.com/login?redirect_to=https%3A%2F%2Fscam.com
 ```
 
-This may seem harmless at first, but it makes it significantly easier to scam users. The user could be redirected to an identical site made by an attacker and be prompted to enter their password again.
+这乍看之下似乎无害，但它大大增加了诈骗用户的可能性。用户可能会被重定向到由攻击者制作的相同网站，并被要求再次输入密码。

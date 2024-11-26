@@ -6,12 +6,14 @@ title: "Generating random values"
 
 ## Table of contents
 
-- [Overview](#overview)
-- [Random strings](#random-strings)
-  - [Custom character set](#custom-character-set)
-- [Random integers](#random-integers)
-- [Random floating-point numbers between 0 and 1](#random-floating-point-numbers-between-0-and-1)
-- [Biases](#biases)
+- [Generating random values](#generating-random-values)
+	- [Table of contents](#table-of-contents)
+	- [Overview](#overview)
+	- [Random strings](#random-strings)
+		- [Custom character set](#custom-character-set)
+	- [Random integers](#random-integers)
+		- [Random floating-point numbers between 0 and 1](#random-floating-point-numbers-between-0-and-1)
+	- [Biases](#biases)
 
 ## Overview
 

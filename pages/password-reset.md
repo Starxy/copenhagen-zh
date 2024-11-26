@@ -2,51 +2,44 @@
 title: "Password reset"
 ---
 
-# Password reset
+# 密码重置
 
-## Table of contents
+## 概述
 
-- [Overview](#overview)
-- [Password reset links](#password-reset-links)
-- [Error handling](#error-handling)
-- [Rate limiting](#rate-limiting)
+密码重置的常见方法是使用用户的电子邮件地址。用户输入他们的电子邮件，如果电子邮件有效，则会向邮箱发送密码重置链接。这要求每个用户都有一个唯一的电子邮件地址——请参阅[电子邮件验证](/email-verification)指南。
 
-## Overview
+在发送重置链接之前，电子邮件不需要经过验证。如果用户重置了密码，您甚至可以将其电子邮件地址标记为已验证。
 
-A common approach to password reset is to use the user's email address. The user enters their email and, if the email is valid, a password reset link is sent to the mailbox. This requires each user to have a unique email address - see the [Email verification](/email-verification) guide.
+当用户重置密码时，使与用户关联的所有现有会话失效。
 
-The email does not need to be verified before sending a reset link. You should even mark a user's email address as verified if they reset their password.
+本页仅涵盖密码重置链接，因为这是最常见的方法。
 
-Invalidate all existing sessions linked to the user when the user resets their password. 
+## 密码重置链接
 
-This page will only cover password reset links as it is the most common approach.
-
-## Password reset links
-
-Password reset requires 2 pages. First is the page where users enter their email address.
+密码重置需要两个页面。首先是用户输入电子邮件地址的页面。
 
 ```
 https://example.com/reset-password
 ```
 
-Next is the actual password reset form, where the user enters their new password. This is the link that gets sent to the user's mailbox. A password reset [token](/server-side-tokens) is included as part of the URL path.
+接下来是实际的密码重置表单，用户在此输入新密码。此链接会发送到用户的邮箱。密码重置[令牌](/server-side-tokens)作为 URL 路径的一部分包含在内。
 
 ```
 https://example.com/reset-password/<TOKEN>
 ```
 
-Tokens should be valid for around an hour, and 24 hours at most. Invalidate existing tokens when sending another token, or reuse an existing valid token if one already exists. It's recommended to hash tokens with SHA-256 before storing them.
+令牌的有效期应为大约一小时，最多不超过 24 小时。在发送新令牌时使现有令牌失效，或者如果已存在有效令牌，则重用它。建议在存储令牌前使用 SHA-256 对其进行哈希。
 
-The token must be single-use. Delete the token when the user sends a valid password through the form.
+令牌必须是一次性的。当用户通过表单发送有效密码时，删除该令牌。
 
-Make sure to set the [Referrer Policy](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Referrer-Policy) tag to `strict-origin` (or equivalent) for any path that includes tokens to protect the tokens from referer leakage.
+确保为包含令牌的任何路径设置 [Referrer Policy](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Referrer-Policy) 标签为 `strict-origin`（或等效值），以保护令牌免受引用者泄漏。
 
-If the user has implemented [multi-factor authentication](/mfa), such as via authenticator apps or WebAuthn, they should be prompted to authenticate using their second factor before entering their new password.
+如果用户已实施[多因素认证](/mfa)，例如通过身份验证器应用或 WebAuthn，在输入新密码之前应提示用户使用第二因素进行身份验证。
 
-## Error handling
+## 错误处理
 
-If the email is invalid, you can either tell the user that the email is invalid or keep the message vague (e.g. "We'll send a reset email if the account exists"). This will depend on whether you'd want to keep the validity of emails public or private. See [Error handling](/password-authentication#error-handling) in the Password authentication guide for more information.
+如果电子邮件无效，可以告诉用户电子邮件无效，或者保持消息模糊（例如，“如果账户存在，我们将发送重置邮件”）。这取决于您是否希望电子邮件的有效性公开或保密。有关更多信息，请参阅密码认证指南中的[错误处理](/password-authentication#error-handling)。
 
-## Rate limiting
+## 限流
 
-Any endpoint that can send emails should have strict rate limiting implemented. Use Captchas if necessary.
+任何可以发送电子邮件的端点都应实施严格的限流。如有必要，使用 Captcha。

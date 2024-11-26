@@ -4,19 +4,6 @@ title: "Cross-site request forgery (CSRF)"
 
 # 跨站请求伪造 (CSRF)
 
-## 目录
-
-- [跨站请求伪造 (CSRF)](#跨站请求伪造-csrf)
-	- [目录](#目录)
-	- [概述](#概述)
-		- [跨站与跨域](#跨站与跨域)
-	- [防护措施](#防护措施)
-		- [反CSRF令牌](#反csrf令牌)
-		- [签名双提交Cookie](#签名双提交cookie)
-			- [传统双提交Cookie](#传统双提交cookie)
-		- [Origin头](#origin头)
-	- [SameSite Cookie属性](#samesite-cookie属性)
-
 ## 概述
 
 CSRF攻击允许攻击者在用户的凭证存储在Cookie中时，代表用户发起已认证的请求。

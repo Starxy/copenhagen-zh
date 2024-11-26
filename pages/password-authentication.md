@@ -2,38 +2,26 @@
 title: "Password authentication"
 ---
 
-# Password authentication
+# 密码认证
 
-## Table of contents
+## 输入验证
 
-- [Input validation](#input-validation)
-	- [Checking for compromised passwords](#checking-for-compromised-passwords)
-- [Password storage](#password-storage)
-	- [Argon2id](#argon2id)
-	- [Scrypt](#scrypt)
-	- [Bcrypt](#bcrypt)
-- [Brute-force attacks](#brute-force-attacks)
-- [Error handling](#error-handling)
-- [Other considerations](#other-considerations)
+- 密码至少应为 8 个字符。
+- 不要将最大密码长度设置得太低，建议范围为 64-256 个字符。
+- 不要默默地修改或截断输入。
+- 应允许所有有效的 Unicode 字符，包括空格。
+- 使用类似 [`zxcvbn`](https://github.com/dropbox/zxcvbn) 的库来检查弱密码。
+- 使用 [haveibeenpwned](https://haveibeenpwned.com/API/v3) 等 API 检测泄露的密码。
 
-## Input validation
+### 检查被泄露的密码
 
-- Passwords must be at least 8 characters long.
-- Do not set the maximum password length too low. Anywhere around 64-256 characters is a good maximum.
-- Do not silently modify or truncate the input.
-- All valid Unicode characters should be allowed, including whitespace.
-- Use libraries like [`zxcvbn`](https://github.com/dropbox/zxcvbn) to check for weak passwords.
-- Detect leaked passwords with APIs such as [haveibeenpwned](https://haveibeenpwned.com/API/v3).
-
-### Checking for compromised passwords
-
-A free service called [haveibeenpwned](https://haveibeenpwned.com/API/v3) can be used to check a password against past leaks. Hash the password with SHA-1 (hex-encoded) and send the first 5 characters.
+可以使用 [haveibeenpwned](https://haveibeenpwned.com/API/v3) 这样的免费服务检查密码是否在过去泄露中。使用 SHA-1 对密码进行哈希（十六进制编码），并发送前 5 个字符。
 
 ```
 GET https://api.pwnedpasswords.com/range/12345
 ```
 
-The API will provide a list of hashed password suffixes beginning with the provided 5 characters
+API 将提供以提供的 5 个字符开头的哈希密码后缀列表。
 
 ```
 ec68dea7966a1ea2ba9408be4dcc409884f
@@ -41,28 +29,28 @@ ec68dea7966a1ea2ba9408be4dcc409884f
 f10a49ecd2ada17a120dc359f162b84e12c
 ```
 
-## Password storage
+## 密码存储
 
-Passwords must be salted and hashed before storage. We recommend using [Argon2id](#argon2id) with salting.
+密码必须在存储前进行加盐和哈希。我们推荐使用带加盐的 [Argon2id](#argon2id)。
 
-In the most basic form, hashing is a one-way process to generate a unique representation of the input. The same input should result in the same hash. Unlike encryption, it is not reversible - you can't get the original data from the hash. Popular examples include MD5, SHA-1, and SHA-256 - **DO NOT USE THESE FOR PASSWORDS**.
+基本上，哈希是一种生成输入唯一表示的单向过程。相同的输入应产生相同的哈希。与加密不同，它是不可逆的——无法从哈希中获得原始数据。常见的例子包括 MD5、SHA-1 和 SHA-256——**不要将它们用于密码**。
 
-Hashing ensures that if you suffer a data breach, hackers won't be able to get the original password. This is especially important if the breach is limited in scope. Even if they were only able to read the user table, they'll effectively have access to everything once they get hold of user passwords. More importantly, however, it protects your users from further harm. Users often reuse passwords. With leaked passwords, hackers can gain access to user accounts in other applications as well.
+哈希确保即使数据泄露，黑客也无法获得原始密码。这在泄露范围有限的情况下尤为重要。即使他们只能读取用户表，一旦获取用户密码，他们就能访问所有内容。更重要的是，它保护您的用户免受进一步伤害。用户经常重复使用密码，泄露的密码可能会让黑客访问其他应用程序中的用户账户。
 
-However, a big issue with passwords is that they aren't truly random. Technically there are 62^8 possible 8-character alphanumeric passwords, but the reality is that most passwords use common words and names, maybe with some numbers at the end. This significantly reduces the number of combinations to test when brute-forcing passwords.
+然而，密码的一个大问题是它们并不是真正随机的。技术上讲，8 个字符的字母数字密码有 \(62^8\) 种可能，但实际上，大多数密码使用常见的单词和名字，可能在末尾加上一些数字。这大大减少了暴力破解密码时需要测试的组合数量。
 
-As such, slow hashing algorithms specifically designed for passwords are used. Common hashing algorithms like SHA-256 are designed to be as fast as possible.
+因此，使用专为密码设计的慢速哈希算法。常见的哈希算法如 SHA-256 旨在尽可能快地运行。
 
-Even when using a slow algorithm, a table of precomputed hashes of common passwords called a rainbow table can be used. Salting is a common technique to prevent these attacks by adding random values to each password before hashing. The salt must be generated using a cryptographically-secure random generator and it should have at least 120 bits of entropy.
+即使使用慢速算法，也可以使用一个预计算的常用密码哈希表，称为彩虹表。加盐是一种常用技术，通过在哈希之前向每个密码添加随机值来防止这些攻击。盐必须使用加密安全的随机生成器生成，并且应具有至少 120 位的熵。
 
 ```
 salt = randomValues()
 hash = hashPassword(password + salt) + salt
 ```
 
-Another option is peppering where you use a secret key when hashing the password. Whereas salts are stored alongside the hashes, the secret key is stored in a separate location. Rolling your own hashing mechanism can be a bad idea so this should only be done if the algorithm you use supports it.
+另一种选择是使用秘密密钥进行加密（peppering）。盐存储在哈希旁边，而秘密密钥存储在单独的位置。自己实现哈希机制可能是个坏主意，因此只有在算法支持的情况下才应这样做。
 
-When comparing password hashes, use constant time comparison instead of `==`. This ensures your application is not vulnerable to timing-based attacks, where an attacker can extract information using how long it took to compare the password with the hash.
+在比较密码哈希时，使用常量时间比较而不是 `==`。这确保您的应用程序不易受到基于时间的攻击，攻击者可以通过比较密码与哈希所需的时间来提取信息。
 
 ```go
 import (
@@ -75,69 +63,69 @@ var password []byte
 hash := argon2.IDKey(password, salt, 2, 19*1024, 1, 32)
 
 if (subtle.ConstantTimeCompare(hash, storedHash)) {
-	// Valid password.
+	// 有效密码。
 }
 ```
 
-Argon2id should be your first choice, followed by Scrypt, and then Bcrypt for legacy systems.
+Argon2id 应为首选，其次是 Scrypt，然后是用于遗留系统的 Bcrypt。
 
-Password hashing is resource-intensive and is vulnerable to denial-of-service (DoS) attacks.
+密码哈希计算资源密集，容易受到拒绝服务（DoS）攻击。
 
 ### Argon2id
 
-Argon2 was the winner of the 2013 Password Hashing Competition and has 3 versions: Argon2i, Argon2d, and Argon2id. Argon2id should be your default option as it provides a good balance between resisting both side-channel and GPU-based attacks. Recommended minimum parameters:
+Argon2 是 2013 年密码哈希竞赛的获胜者，具有 3 个版本：Argon2i、Argon2d 和 Argon2id。Argon2id 应为默认选项，因为它在抵御侧信道和 GPU 攻击方面提供了良好的平衡。推荐的最低参数：
 
 - `memorySize`: 19456 (19 MB)
 - `iterations`: 2
 - `parallelism`: 1
 
-Optionally use the `secret` parameter to pepper your hashes. [See OWASP for details](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html#argon2id).
+可选地使用 `secret` 参数对哈希进行加密。[查看 OWASP 详情](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html#argon2id)。
 
 ### Scrypt
 
-Recommended minimum parameters:
+推荐的最低参数：
 
 - `N`: 16384
 - `P`: 16
 - `r`: 1
 - `dkLen`: 64
 
-[See OWASP for details](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html#scrypt).
+[查看 OWASP 详情](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html#scrypt)。
 
 ### Bcrypt
 
-The work factor should be at minimum a 10.
+工作因子至少应为 10。
 
-Bcrypt has a maximum input length of 72 bytes, and some implementations may have a limit as low as 50 bytes. Pre-hashing the password with algorithms like SHA-256/512 is not recommended as some implementations of Bcrypt are not built to handle null bytes. Do not attempt to implement peppering by using HMAC either. Use algorithms like [Argon2id](#argon2id) or [Scrypt](#scrypt) instead if you need to support longer passwords.
+Bcrypt 的最大输入长度为 72 字节，一些实现可能限制为 50 字节。使用 SHA-256/512 等算法进行预哈希并不推荐，因为一些 Bcrypt 实现无法处理空字节。也不要尝试通过使用 HMAC 实现加密。若需支持更长的密码，请使用类似 [Argon2id](#argon2id) 或 [Scrypt](#scrypt) 的算法。
 
-[See OWASP for details](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html#bcrypt).
+[查看 OWASP 详情](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html#bcrypt)。
 
-## Brute-force attacks
+## 防止暴力破解
 
-Passwords are susceptible to brute-force attacks. There are mainly 2 approaches to brute-forcing:
+密码容易受到暴力破解攻击。主要有两种暴力破解的方法：
 
-1. The attacker tries a bunch of common passwords.
-2. The attacker targets specific accounts using leaked passwords (credential stuffing).
+1. 攻击者尝试一堆常用密码。
+2. 攻击者使用泄露的密码针对特定账户（凭证填充）。
 
-[Multi-factor authentication (MFA)](/mfa) is the best defense against brute-force attacks. While it doesn't prevent brute-force attacks themselves, it does make it nearly pointless to do. Users should be recommended to enable MFA and it should be required for security-critical applications.
+[多因素认证 (MFA)](/mfa) 是防御暴力破解攻击的最佳方法。虽然它不能阻止暴力破解攻击本身，但它几乎使攻击无效。应推荐用户启用 MFA，并应要求安全关键应用程序使用。
 
-IP-based throttling should always be implemented. A basic example is to block all attempts from an IP address for 10 minutes after they fail 10 consecutive attempts. Other ideas include increasing the lockout period on each lockout and gradually allowing new attempts at a set interval after a lockout. This also prevents DOS attacks as password hashing is resource-intensive. An identifier-based throttling can also be implemented on top of IP-based throttling, though this can introduce DoS vulnerabilities (see [device cookies](https://owasp.org/www-community/Slow_Down_Online_Guessing_Attacks_with_Device_Cookies)).
+应始终实施基于 IP 的限流。一个基本的例子是，在同一 IP 地址连续失败 10 次后，阻止所有尝试 10 分钟。其他方法包括在每次锁定时增加锁定时间，并在锁定后逐渐允许新的尝试。这也可以防止 DoS 攻击，因为密码哈希计算资源密集。还可以在 IP 限流的基础上实现基于标识符的限流，尽管这可能引入 DoS 漏洞（参见 [设备 cookies](https://owasp.org/www-community/Slow_Down_Online_Guessing_Attacks_with_Device_Cookies)）。
 
-Another layer of security you can implement is bot detection using tests like Captchas.
+您可以实施的另一层安全性是使用 Captcha 等测试进行机器人检测。
 
-Finally, ensure a certain strength of passwords for users. Make sure passwords aren't weak and that they haven't been part of previous leaks. See the [Password validation](#password-validation) section.
+最后，确保用户密码的强度。确保密码不弱且未曾泄露。参见 [密码验证](#输入验证) 部分。
 
-## Error handling
+## 错误处理
 
-As a good rule of thumb, error messages should be vague and generic. For example, a login form should display "Incorrect username or password" instead of "Incorrect username" or "Incorrect password." Similarly, a sign-in form shouldn't share whether a email is already used by an existing account.
+作为一个好的经验法则，错误消息应模糊且通用。例如，登录表单应显示“用户名或密码错误”，而不是“用户名错误”或“密码错误”。同样，登录表单不应透露电子邮件是否已被现有账户使用。
 
-However, from a user-experience perspective, it's more user-friendly to tell the user directly that their username or email is incorrect. This should be fine for websites where usernames are already public (e.g. social media) or where knowing the validity of a email isn't important (i.e. most sites). This makes brute-force attacks slightly easier since attackers only need to guess passwords, but you should already have [proper measures](#brute-force-attacks) implemented.
+然而，从用户体验的角度来看，直接告诉用户他们的用户名或电子邮件不正确更为友好。这对于用户名已经公开（例如社交媒体）或知道电子邮件的有效性并不重要的网站（即大多数网站）来说是可以的。这使得暴力破解攻击稍微容易一些，因为攻击者只需猜测密码，但您应该已经实施了[适当的措施](#防止暴力破解)。
 
-If you need to keep the username or email private, make sure you do not leak such information via registration forms and password reset forms. For example, when creating an account, you can prompt the user with a message like "We've sent an email to your inbox with further instructions" regardless of whether the email is taken. If they already have an account, you can include that information in the email itself. Even when returning a generic message however, it may be possible to determine if a user exists or not by checking the response times. For example, if you only validate the password when the username is valid. Protecting against timing-attacks is hard so only go this route if strictly required.
+如果需要保持用户名或电子邮件私密，请确保不要通过注册表单和密码重置表单泄露此类信息。例如，在创建账户时，可以提示用户“我们已向您的收件箱发送了一封包含进一步说明的电子邮件”，无论电子邮件是否已被占用。如果他们已经有账户，可以在电子邮件中包含该信息。即使返回通用消息，通过检查响应时间仍可能确定用户是否存在。例如，只有在用户名有效时才验证密码。防止时间攻击很难，所以只有在严格要求的情况下才走这条路。
 
-## Other considerations
+## 其他注意事项
 
-- Do not prevent users from copy-pasting passwords as it discourages users from using password managers.
-- Do not require users to change passwords periodically.
-- Ask for the current password when a user attempts to change their password.
-- [Open redirect](/open-redirect).
+- 不要阻止用户复制粘贴密码，因为这会阻止用户使用密码管理器。
+- 不要要求用户定期更改密码。
+- 当用户尝试更改密码时，请询问当前密码。
+- [开放重定向](/open-redirect)。
