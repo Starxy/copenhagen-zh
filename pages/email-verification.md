@@ -2,73 +2,75 @@
 title: "Email verification"
 ---
 
-# Email verification
+# 邮件验证
 
-If your application requires user email addresses to be unique, email verification is a must. It discourages users from entering a random email address and, if password reset is implemented, allows users to take back accounts created with their email address. You may even want to block users from accessing your application's content until they verify their email address.
+如果应用程序要求用户的电子邮件地址唯一，邮件验证是必须的。它可以阻止用户输入随机的电子邮件地址，并允许用户在实施密码重置的情况下取回用其电子邮件地址创建的账户。您甚至可能希望在用户验证其电子邮件地址之前阻止他们访问应用程序的内容。
 
-*Email addresses are case-insensitive.* We recommend normalizing user-provided email addresses to lower case.
+*电子邮件地址不区分大小写。* 我们建议将用户提供的电子邮件地址标准化为小写。
 
-## Table of contents
+## 目录
 
-- [Input validation](#input-validation)
-	- [Sub-addressing](#sub-addressing)
-- [Email verification codes](#email-verification-codes)
-- [Email verification links](#email-verification-links)
-- [Changing emails](#changing-emails)
-- [Rate limiting](#rate-limiting)
+- [邮件验证](#邮件验证)
+	- [目录](#目录)
+	- [输入验证](#输入验证)
+		- [子地址](#子地址)
+	- [邮件验证代码](#邮件验证代码)
+	- [邮件验证链接](#邮件验证链接)
+	- [更改电子邮件](#更改电子邮件)
+	- [速率限制](#速率限制)
 
-## Input validation
+## 输入验证
 
-Emails are complex and cannot be fully validated using Regex. Attempting to use Regex may also introduce [ReDoS vulnerabilities](https://owasp.org/www-community/attacks/Regular_expression_Denial_of_Service_-_ReDoS). Do not over-complicate it:
+电子邮件复杂，无法使用正则表达式充分验证。尝试使用正则表达式也可能引入[正则表达式拒绝服务（ReDoS）漏洞](https://owasp.org/www-community/attacks/Regular_expression_Denial_of_Service_-_ReDoS)。不要过度复杂化：
 
-- Includes at least 1 `@` character.
-- Has at least 1 character before the`@`.
-- The domain part includes at least 1 `.` and has at least 1 character before it.
-- It does not start or end with a whitespace.
-- Maximum of 255 characters.
+- 必须包含至少一个`@`字符。
+- 在`@`前至少有一个字符。
+- 域部分至少有一个`.`，且在它之前至少有一个字符。
+- 不以空格开始或结束。
+- 最多255个字符。
 
-### Sub-addressing
+### 子地址
 
-Some email providers, including Google, allow users to specify a tag that will be ignored by their servers. For example, a user with `user@example.com` can use `user+foo@example.com` and `user+bar@example.com`. You can block emails with `+` to prevent users from making multiple accounts with the same email address, but users would still be able to use temporary email addresses or just create a new email address. Never silently remove the tag portion from the user input as an email address with `+` can just be a regular, valid email address.
+一些电子邮件提供商（包括Google）允许用户指定一个邮件服务会忽略的标签。例如，`user@example.com`可以使用`user+foo@example.com`和`user+bar@example.com`。您可以阻止带`+`符号的电子邮件以防止用户使用相同电子邮件地址创建多个账户，但用户仍可以使用临时电子邮件地址或创建新邮箱。切勿默默地移除用户输入中的标签部分，因为带`+`的电子邮件地址可能是常规的有效电子邮件地址。
 
-## Email verification codes
+## 邮件验证代码
 
-One way to verify email is to send a secret code stored in the server to the user's mailbox.
+一种验证电子邮件的方法是向用户的邮箱发送服务器存储的秘密代码。
 
-This approach has some advantages over using links:
+这种方法相比使用链接有一些优势：
 
-- People are increasingly less likely to click on links.
-- Some filters may automatically classify emails with links as spam or phishing.
-- Using verification links may introduce friction if the user wants to finish the process on a device that does not have access to the verification message, or on a device that cannot open links.
+- 人们越来越不愿点击链接。
+- 一些过滤器可能会自动将带有链接的电子邮件归类为垃圾邮件或网络钓鱼。
+- 使用验证链接可能会增加摩擦，尤其是在用户想在无法访问验证消息或无法打开链接的设备上完成验证过程时。
 
-The verification code should be at least 8 digits if the code is numeric, and at least 6 digits if it's alphanumeric. Use a stronger code if the verification is part of a secure process, like creating a new account or changing contact information. You should avoid using both lowercase and uppercase letters. You may also want to remove numbers and letters that can be misread (0, O, 1, I, etc). It must be generated using a cryptographically secure random generator.
+如果代码为数字，验证代码至少应为8位；如果为字母数字，至少为6位。如果验证是安全过程的一部分（如创建新账户或更改联系方式），应使用更强的代码。避免使用大写和小写字母。您可能还希望删除容易混淆的数字和字母（0, O, 1, I等）。必须使用密码学安全的随机生成器生成。
 
-A single verification code should be tied to a single user and email. This is especially important if you allow users to change their email address after they're sent an email. Each code should be valid for at least 15 minutes (anywhere between 1-24 hours is recommended). The code must be single-use and immediately invalidated after validation. A new verification code should be generated every time the user asks for another email/code.
+每个验证代码应关联到单个用户和电子邮件。当允许用户在发送电子邮件后更改电子邮件地址时尤其重要。每个代码至少应有效15分钟（推荐1-24小时）。验证后，代码必须立即失效且只能使用一次。每次用户请求另一封邮件/代码时，应生成新验证码。
 
-Similar to a regular login form, throttling or rate-limiting based on the user ID must be implemented. A good limit is around 10 attempts per hour. Assuming proper limiting is implemented, the code can be valid for up to 24 hours. You should generate and resend a new code if the user-provided code has expired.
+类似于常规登录表单，必须根据用户ID实施节流或速率限制。每小时约10次尝试是一个合理的限制。在正确实施限制的情况下，代码可有效长达24小时。如果用户提供的代码已过期，您应生成并重新发送新代码。
 
-All sessions of a user should be invalidated when their email is verified.
+当用户的电子邮件验证后，所有会话都应失效。
 
-## Email verification links
+## 邮件验证链接
 
-An alternative way to verify emails is to use a verification link that contains a long, random, single-use [token](/server-side-tokens).
+另一种验证电子邮件的方法是使用包含长随机单次使用[令牌](/server-side-tokens)的验证链接。
 
-```
+```text
 https://example.com/verify-email/<TOKEN>
 ```
 
-A single token should be tied to a single user and email. This is especially important if you allow users to change their email address after they're sent an email. Tokens should be single-use and be immediately deleted from storage after verification. The token should be valid for at least 15 minutes (anywhere between 1-24 hours is recommended). When a user asks for another verification email, you can resend the previous token instead of generating a new token if that token is still within expiration.
+每个令牌应关联到单个用户和电子邮件。当允许用户在发送电子邮件后更改电子邮件地址时尤其重要。令牌应为单次使用，且验证后立即从存储中删除。令牌至少应有效15分钟（推荐1-24小时）。当用户请求另一个验证电子邮件时，如果令牌还未过期，您可以重新发送以前的令牌，而不是生成新令牌。
 
-Make sure to set the [Referrer Policy](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Referrer-Policy) tag to `strict-origin` (or equivalent) for any path that includes tokens to protect the tokens from referer leakage.
+确保为包含令牌的任何路径设置[Referrer Policy](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Referrer-Policy)标记为`strict-origin`（或等效），以保护令牌不被引用泄露。
 
-All sessions should be invalidated when the email is verified (and create a new one for the current user so they stay signed in).
+电子邮件验证后，所有会话都应失效（并为当前用户创建新会话以保持登录状态）。
 
-## Changing emails
+## 更改电子邮件
 
-The user should be asked for their password, or if [multi-factor authentication](/mfa) is enabled, authenticated with one of their second factors. The new email should be stored separately from the current email until it's verified. For example, the new email could be stored with the verification token/code.
+用户应被要求输入他们的密码，或者如果启用了[多因素身份验证](/mfa)，则使用他们的第二因素之一进行身份验证。新电子邮件应与当前电子邮件分开存储，直到验证完成。例如，可以将新电子邮件与验证令牌/代码一起存储。
 
-A notification should be sent to the previous email address when the user changes their email.
+当用户更改其电子邮件时，应向之前的电子邮件地址发送通知。
 
-## Rate limiting
+## 速率限制
 
-Any endpoint that can send emails should have strict rate limiting implemented.
+任何能发送电子邮件的端点都应实施严格的速率限制。

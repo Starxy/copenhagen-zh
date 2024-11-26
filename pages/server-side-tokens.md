@@ -2,44 +2,46 @@
 title: "Server-side tokens"
 ---
 
-# Server-side tokens
+# 服务器端令牌
 
-## Table of contents
+## 目录
 
-- [Overview](#overview)
-- [Generating tokens](#generating-tokens)
-- [Storing tokens](#storing-tokens)
+- [服务器端令牌](#服务器端令牌)
+	- [目录](#目录)
+	- [概述](#概述)
+	- [生成令牌](#生成令牌)
+	- [存储令牌](#存储令牌)
 
-## Overview
+## 概述
 
-A "server-side token" is any long, random string that is stored on the server. It may be persisted in a database or in-memory data store (e.g. Redis) and is used for authentication and verification. A token can be validated by checking if it exists in storage. Examples include session IDs, email verification tokens, and access tokens.
+“服务器端令牌”是存储在服务器上的任意长、随机字符串。它可以保存在数据库或内存存储中（如 Redis），用于身份验证和验证。通过检查令牌是否存在于存储中可以进行验证。示例包括会话 ID、电子邮件验证令牌和访问令牌。
 
-```
+```sql
 CREATE TABLE token (
-	token STRING NOT NULL UNIQUE,
-	expires_at INTEGER NOT NULL,
-	user_id INTEGER NOT NULL,
+    token STRING NOT NULL UNIQUE,
+    expires_at INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
 
-	FOREIGN KEY (user_id) REFERENCES user(id)
+    FOREIGN KEY (user_id) REFERENCES user(id)
 )
 ```
 
-For single-use tokens, any retrieval should also guarantee deletion. In SQL for example, an atomic operation such as a transaction should be used when fetching a token.
+对于一次性使用的令牌，任何检索操作也应保证删除。在 SQL 中，例如，在获取令牌时应使用事务等原子操作。
 
-## Generating tokens
+## 生成令牌
 
-Tokens should have at least 112 bits of entropy (120-256 is a good range). For example, you could generate 15 random bytes and encode it with base32 to get a 24-character token. If you generate tokens by choosing random characters one by one, you should ensure a similar level of entropy. See the [Generating random values](/random-values) page for more information.
+令牌应至少具有 112 位的熵（120-256 位是个不错的范围）。例如，可以生成 15 个随机字节并用 base32 编码得到一个 24 个字符的令牌。如果通过逐字符随机选择来生成令牌，应确保具有类似的熵水平。有关更多信息，请参考[生成随机值](/random-values)页面。
 
-Tokens must be generated using a cryptographically secure random generator. Fast, pseudo-random generators like those generally provided by standard math packages should be avoided for this.
+必须使用加密安全的随机生成器来生成令牌。应避免使用标准数学包中提供的快速伪随机生成器。
 
-Tokens should be case-sensitive, but you may want to constrain your token generation to lowercase letters if your storage is case-insensitive (e.g. MySQL).
+令牌应区分大小写，但如果存储不区分大小写（例如 MySQL），则可能需要将令牌生成限制为小写字母。
 
-> For a 120 bit token, it would take someone 2 quintillion years before they guess a valid token if they generate 10,000 tokens per second and there are 1,000,000 valid tokens in the system.
+> 对于 120 位令牌，即使每秒生成 10,000 个令牌，系统中有 1,000,000 个有效令牌，猜中一个有效令牌也需要 20 亿年。
 
 ```go
 import (
-	"crypto/rand"
-	"encoding/base32"
+    "crypto/rand"
+    "encoding/base32"
 )
 
 bytes := make([]byte, 15)
@@ -47,10 +49,10 @@ rand.Read(bytes)
 sessionId := base32.StdEncoding.EncodeToString(bytes)
 ```
 
-UUID v4 may fit these requirements (122 bits of entropy), but keep in mind that UUID v4 is space inefficient and the spec does not guarantee the use of a cryptographically secure random generator.
+UUID v4 可能符合这些要求（122 位的熵），但请记住 UUID v4 的空间效率低下，规范也不保证使用加密安全的随机生成器。
 
-## Storing tokens
+## 存储令牌
 
-Tokens that require an extra level of security, such as password reset tokens, should be hashed with SHA-256. SHA-256 can be used instead of a slower algorithm here as the token is sufficiently long and random. Tokens can be validated by hashing the incoming token before querying.
+如密码重置令牌等需要额外安全级别的令牌，应使用 SHA-256 进行哈希处理。由于令牌足够长且随机，可使用 SHA-256 而非较慢的算法。在查询之前，通过将传入的令牌进行哈希来验证。
 
-Real-life examples of accidental leaks include [Paleohacks](https://www.vpnmentor.com/blog/report-paleohacks-breach/) and [Spoutible](https://www.troyhunt.com/how-spoutibles-leaky-api-spurted-out-a-deluge-of-personal-data/).
+现实生活中的泄漏示例包括 [Paleohacks](https://www.vpnmentor.com/blog/report-paleohacks-breach/) 和 [Spoutible](https://www.troyhunt.com/how-spoutibles-leaky-api-spurted-out-a-deluge-of-personal-data/)。

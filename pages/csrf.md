@@ -2,35 +2,38 @@
 title: "Cross-site request forgery (CSRF)"
 ---
 
-# Cross-site request forgery (CSRF)
+# 跨站请求伪造 (CSRF)
 
-## Table of contents
+## 目录
 
-- [Overview](#overview)
-	- [Cross-site vs cross-origin](#cross-site-vs-cross-origin)
-- [Prevention](#prevention)
-	- [Anti-CSRF tokens](#anti-csrf-tokens)
-	- [Signed double-submit cookies](#signed-double-submit-cookies)
-	- [Origin header](#origin-header)
-- [SameSite cookie attribute](#samesite-cookie-attribute)
+- [跨站请求伪造 (CSRF)](#跨站请求伪造-csrf)
+	- [目录](#目录)
+	- [概述](#概述)
+		- [跨站与跨域](#跨站与跨域)
+	- [防护措施](#防护措施)
+		- [反CSRF令牌](#反csrf令牌)
+		- [签名双提交Cookie](#签名双提交cookie)
+			- [传统双提交Cookie](#传统双提交cookie)
+		- [Origin头](#origin头)
+	- [SameSite Cookie属性](#samesite-cookie属性)
 
-## Overview
+## 概述
 
-CSRF attacks allow an attacker to make authenticated requests on behalf of users when credentials are stored in cookies.
+CSRF攻击允许攻击者在用户的凭证存储在Cookie中时，代表用户发起已认证的请求。
 
-When a client makes a cross-origin request, the browser sends a preflight request to check whether the request is allowed (CORS). However, for certain "simple" requests, including form submissions, this step is omitted. And since cookies are automatically included even for cross-origin requests, it allows a malicious actor to make requests as the authenticated user without ever directly stealing the token from any domain. The [same-origin policy](https://developer.mozilla.org/en-US/docs/Web/Security/Same-origin_policy) prohibits cross-origin clients from reading responses by default, but the request still goes through.
+当客户端发起跨域请求时，浏览器会发送预检请求以检查请求是否被允许（CORS）。但对于一些“简单”请求，例如表单提交，这一步被省略。由于即使对于跨域请求也自动包含Cookie，这使恶意攻击者能在不直接窃取任何域的令牌的情况下，作为认证用户发起请求。[同源策略](https://developer.mozilla.org/en-US/docs/Web/Security/Same-origin_policy)默认禁止跨域客户端读取响应，但请求仍会通过。
 
-For example, if you are signed into `bank.com`, your session cookie will be sent alongside this form submission even if the form is hosted on a different domain.
+例如，如果您登录了`bank.com`，即使表单托管在不同的域上，您的会话Cookie仍会随着此表单提交发送。
 
 ```html
 <form action="https://bank.com/send-money" method="post">
-	<input name="recipient" value="attacker" />
-	<input name="value" value="$100" />
-	<button>Send money</button>
+  <input name="recipient" value="attacker" />
+  <input name="value" value="$100" />
+  <button>Send money</button>
 </form>
 ```
 
-This can just be a `fetch()` request so no user input is required.
+这也可以通过`fetch()`请求实现，因此不需要用户输入。
 
 ```ts
 const body = new URLSearchParams();
@@ -38,40 +41,40 @@ body.set("recipient", "attacker");
 body.set("value", "$100");
 
 await fetch("https://bank.com/send-money", {
-	method: "POST",
-	body
+  method: "POST",
+  body
 });
 ```
 
-### Cross-site vs cross-origin
+### 跨站与跨域
 
-While requests between 2 totally different domains are considered as both cross-site and cross-origin, those between 2 subdomains are not considered cross-site but are considered cross-origin requests. While the name cross-site request forgery implies cross-site requests, you should be strict by default and protect your application from cross-origin attacks as well.
+当请求在两个完全不同的域之间时，被认为是跨站和跨域请求，而在两个子域之间则仅被视为跨域请求。虽然跨站请求伪造（CSRF）暗示跨站请求，但默认应严格对待，也要防范跨域攻击。
 
-## Prevention
+## 防护措施
 
-CSRF can be prevented by only accepting POST and POST-like requests made by browsers from a trusted origin.
+可以通过仅接受来自可信来源的浏览器发起的POST及类似POST的请求来防止CSRF。
 
-Protection must be implemented for all routes that deal with forms. If your application does not currently use forms, it may still be a good idea to at least [check the `Origin` header](#origin-header) to prevent future issues. It's also a generally good idea to only modify resources using POST and POST-like methods (PUT, DELETE, etc).
+所有处理表单的路由都必须实施保护措施。如果您的应用程序当前不使用表单，也至少应检查[Origin头](#origin头)以防止未来的问题。通常建议只使用POST及类似的请求方法（如PUT, DELETE等）来修改资源。
 
-For the common token-based approach, the token should not be single-use (e.g. a new token for every form submission) as it will break with a single back button. It is also crucial that your pages have a strict cross-origin resource sharing (CORS) policy. If `Access-Control-Allow-Credentials` is not strict, a malicious site can send a GET request to get an HTML form with a valid CSRF token.
+对于常见的基于令牌的方法，令牌不应为单次使用的（例如每次表单提交新的令牌），因为这会在按下返回按钮时导致问题。同时，页面应有严格的跨域资源共享（CORS）策略。如果`Access-Control-Allow-Credentials`不严格，恶意站点可以发送GET请求获取具有有效CSRF令牌的HTML表单。
 
-### Anti-CSRF tokens
+### 反CSRF令牌
 
-This is a very simple method where each session has a unique CSRF [token](/server-side-tokens) associated with it.
+这是一个非常简单的方法，每个会话都有一个唯一的CSRF [令牌](/server-side-tokens) 关联。
 
 ```html
 <form method="post">
-	<input name="message" />
-	<input type="hidden" name="__csrf" value="<CSRF_TOKEN>" />
-	<button>Submit</button>
+  <input name="message" />
+  <input type="hidden" name="__csrf" value="<CSRF_TOKEN>" />
+  <button>Submit</button>
 </form>
 ```
 
-### Signed double-submit cookies
+### 签名双提交Cookie
 
-If storing the token server-side is not an option, using signed double-submit cookies is another approach. This is different from the basic double submit cookie in that the token included in the form is signed with a secret.
+如果无法在服务器上存储令牌，可以使用签名双提交Cookie。这不同于基本的双提交Cookie，因为表单中包含的令牌使用密钥签名。
 
-A new [token](/server-side-tokens) is generated and hashed with HMAC SHA-256 using a secret key.
+使用HMAC SHA-256和密钥生成新的[令牌](/server-side-tokens)并对其进行哈希处理。
 
 ```go
 func generateCSRFToken() (string, []byte) {
@@ -84,7 +87,7 @@ func generateCSRFToken() (string, []byte) {
 	return csrfToken, csrfTokenHMAC
 }
 
-// Optionally, link the cookie to a specific session ID.
+// 可选择将Cookie与特定会话ID关联。
 func generateCSRFToken(sessionId string) (string, []byte) {
 	// ...
 	mac.Write([]byte(csrfToken + "." + sessionId))
@@ -93,41 +96,39 @@ func generateCSRFToken(sessionId string) (string, []byte) {
 }
 ```
 
-The token is stored as a cookie and the HMAC is stored in the form. The cookie should have a `Secure`, `HttpOnly`, and `SameSite` flag. To validate a request, the cookie can be used to verify the signature sent in the form data.
+令牌存储为Cookie，HMAC存储在表单中。Cookie应具有`Secure`、`HttpOnly`和`SameSite`标志。要验证请求，可以使用Cookie验证表单数据中发送的签名。
 
-#### Traditional double-submit cookies
+#### 传统双提交Cookie
 
-Regular double-submit cookies that aren't signed will still leave you vulnerable if an attacker has access to a subdomain of your application's domain. This would allow them to set their own double-submit cookies.
+常规双提交Cookie如果没有签名，在攻击者访问应用程序域的子域时仍可能导致漏洞。这将允许他们设置自己的双提交Cookie。
 
-### Origin header
+### Origin头
 
-A very simple way to prevent CSRF attacks is to check the `Origin` header of the request for non-GET requests. This is a relatively new header that includes the request [origin](https://developer.mozilla.org/en-US/docs/Glossary/Origin). If you rely on this header, it is crucial that your application does not use GET requests for modifying resources.
+防止CSRF攻击的一个简单方法是检查非GET请求的`Origin`头。这是一个新引入的头，包含请求的[来源](https://developer.mozilla.org/en-US/docs/Glossary/Origin)。如果依赖该头，重要的是应用程序不使用GET请求来修改资源。
 
-While the `Origin` header can be spoofed by using a custom client, the important part is that it can't be done using client-side JavaScript. Users are only vulnerable to CSRF when using a browser.
+虽然`Origin`头可以通过自定义客户端伪造，但关键是不能通过客户端JavaScript伪造。用户仅在使用浏览器时容易受到CSRF攻击。
 
 ```go
 func handleRequest(w http.ResponseWriter, request *http.Request) {
-  	if request.Method != "GET" {
-		originHeader := request.Header.Get()
-		// You can also compare it against the Host or X-Forwarded-Host header.
-		if originHeader != "https://example.com" {
-			// Invalid request origin
-			w.WriteHeader(403)
-			return
-		}
-  	}
-  	// ...
+    if request.Method != "GET" {
+        originHeader := request.Header.Get("Origin")
+        // 还可以将其与Host或X-Forwarded-Host头进行比较。
+        if originHeader != "https://example.com" {
+            // 请求来源无效
+            w.WriteHeader(403)
+            return
+        }
+    }
+    // ...
 }
 ```
 
-The `Origin` header has been supported by all modern browsers since around 2020, though Chrome and Safari have supported it before that. If the `Origin` header is not included, do not allow the request.
+大约自2020年以来，所有现代浏览器都支持`Origin`头，尽管Chrome和Safari早在之前就支持它。如果未包含`Origin`头，不允许请求。
 
-The `Referer` header is a similar header introduced before the `Origin` header. This can be used as a fallback if the `Origin` header isn't defined.
+`Referer`头是`Origin`头之前引入的类似头。当`Origin`头未定义时可作为回退。
 
-## SameSite cookie attribute
+## SameSite Cookie属性
 
-Session cookies should have a `SameSite` flag. This flag determines when the browser includes the cookie in requests. `SameSite=Lax` cookies will only be sent on cross-site requests if the request uses a [safe HTTP method](https://developer.mozilla.org/en-US/docs/Glossary/Safe/HTTP) (such as GET), while `SameSite=Strict` cookies will not be sent on any cross site requests. We recommend using `Lax` as the default as `Strict` cookies will not be sent when a user accesses your website via an external link.
+会话Cookie应具有`SameSite`标志。此标志决定浏览器在何时在请求中包含Cookie。`SameSite=Lax`的Cookie仅在使用[安全HTTP方法](https://developer.mozilla.org/en-US/docs/Glossary/Safe/HTTP)（如GET）的跨站请求中发送，而`SameSite=Strict`的Cookie不会在任何跨站请求中发送。建议默认使用`Lax`，因为`Strict`的Cookie不会在用户通过外部链接访问您网站时发送。
 
-If you set the value to `Lax`, it is crucial that your application does not use GET requests for modifying resources. Browser support for the `SameSite` flag shows it is currently available to 96% of web users. It’s important to note that the flag only protects against *cross-site* request forgery (not *cross-origin* request forgery), and generally shouldn’t be your only layer of defense.
-
-
+如果设置为`Lax`，应用程序不应使用GET请求来修改资源。`SameSite`标志的浏览器支持显示它目前对96%的网络用户可用。需要注意的是，该标志仅保护*跨站*请求伪造（不保护*跨域*请求伪造），一般不应作为唯一的防御措施。
