@@ -1,6 +1,6 @@
-# The Copenhagen Book
+# Copenhagen 手册
 
-**[thecopenhagenbook.com](https://thecopenhagenbook.com)**
+**[Copenhagen 手册](https://copenhagen-zh.starxy.cc/)**
 
 The Copenhagen Book provides a general guideline on implementing auth in web applications. It is free, open source, and community maintained. It may be opinionated or incomplete at times but we hope this fills a certain void in online resources. We recommend using this alongside the [OWASP Cheat Sheet Series](https://cheatsheetseries.owasp.org/index.html).
 
